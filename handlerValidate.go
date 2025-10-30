@@ -19,7 +19,7 @@ func handlerValidate(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
 	if err := decoder.Decode(&params); err != nil {
-		responseWithError(w, http.StatusInternalServerError, "could't decode errors", err)
+		responseWithError(w, http.StatusInternalServerError, "unable to decode", err)
 		return
 	}
 	if len(params.Body) > 140 {
