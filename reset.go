@@ -1,12 +1,7 @@
 package main
 
 import (
-	"errors"
-	"log"
 	"net/http"
-	"os"
-
-	"github.com/joho/godotenv"
 )
 
 func (cfg *apiConfig) resetUsers(w http.ResponseWriter, r *http.Request) {
