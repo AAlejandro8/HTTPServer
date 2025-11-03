@@ -3,6 +3,8 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/alexedwards/argon2id"
@@ -61,7 +63,7 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error){
 	if err != nil {
 		return uuid.UUID{}, err
 	}
-	if issuer != "chripy" {
+	if issuer != "chirpy" {
 		return uuid.UUID{}, errors.New("invalid issuer")
 	}
 
@@ -70,4 +72,14 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error){
 		return uuid.UUID{}, fmt.Errorf("invalid userID: %w", err)
 	}
 	return userID, nil
+}
+
+func GetBearerToken(headers http.Header) (string, error) {
+	tokenString := headers.Get("Authorization")
+	if tokenString == "" {
+		return "", errors.New("authorization empty in headers")
+	}
+	rawTokenString := strings.TrimPrefix(strings.TrimSpace(tokenString), "Bearer ")
+	
+	return rawTokenString, nil
 }

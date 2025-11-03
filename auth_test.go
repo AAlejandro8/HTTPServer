@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net/http"
 	"testing"
 	"time"
 
@@ -79,5 +80,18 @@ func TestValidateJWT_WrongSecret(t *testing.T) {
     _, err = internal.ValidateJWT(token, "wrong")
     if err == nil {
 	t.Fatalf("Signatre invalid: %v", err)
+    }
+}
+
+func TestGetBearerToken_Basic(t *testing.T) {
+    myHeader := http.Header{}
+    myHeader.Set("Authorization", "nsfanfoanfoianfo141414")
+
+    expected, err := internal.GetBearerToken(myHeader)
+    if err != nil {
+        t.Fatalf("Error in the bearer: %v", err)
+    }
+    if expected != "nsfanfoanfoianfo141414"{
+        t.Fatalf("Recieved a diff value: %s", expected)
     }
 }

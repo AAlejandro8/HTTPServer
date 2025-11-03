@@ -2,9 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/AAelajndro8/HTTPServer/internal"
 	"github.com/AAelajndro8/HTTPServer/internal/database"
 	"github.com/google/uuid"
 )
@@ -91,10 +94,22 @@ func (cfg *apiConfig) handlerChirps(w http.ResponseWriter, r *http.Request) {
 		"sharbert": {},
 		"fornax": {},
 	}
+	// check JWT Token
+	bearerToken, err := internal.GetBearerToken(r.Header)
+	if err != nil {
+		responseWithError(w, http.StatusInternalServerError, "error getting bearer token",err)
+		return
+	}
+	validatedID, err := internal.ValidateJWT(bearerToken, cfg.jwtsecret)
+	if err != nil {
+		responseWithError(w, http.StatusInternalServerError, fmt.Sprintf("error in the method %w", err), err)
+		return
+	}
+
 	params.Body = replaceBadWords(params.Body, badWords)
 	chirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
 		Body: params.Body,
-		UserID: params.UserId,
+		UserID: validatedID,
 	})
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
