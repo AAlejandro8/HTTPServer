@@ -1,6 +1,8 @@
 package internal
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -12,6 +14,10 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	tokenIssuer = "chirpy-access"
+	refreshTokenLength = 32
+)
 
 func HashPassword(password string) (string, error) {
 	hash, err := argon2id.CreateHash(password, argon2id.DefaultParams)
@@ -29,13 +35,19 @@ func CheckPasswordHash(password, hash string) (bool, error) {
 	return checked, nil
 }
 
-func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (string, error) {
+// make the JWT with the claims
+func MakeJWT(
+	userID uuid.UUID, 
+	tokenSecret string, 
+	expiresIn time.Duration,
+	) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256,jwt.RegisteredClaims{
-		Issuer: "chirpy",
+		Issuer: tokenIssuer,
 		IssuedAt: jwt.NewNumericDate(time.Now().UTC()),
 		ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(expiresIn)),
 		Subject: userID.String(),
 	})
+	
 	tokenString, err := token.SignedString([]byte(tokenSecret))
 	if err != nil {
 		return "", err
@@ -44,26 +56,32 @@ func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (str
 }
 
 func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error){
-	claims := &jwt.RegisteredClaims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (any, error) {
-		return []byte(tokenSecret), nil
-	}) 
+	// make empty claims which parsewithclaims unmarshals into it (populating it)
+	claims := jwt.RegisteredClaims{}
+	token, err := jwt.ParseWithClaims(
+		tokenString, 
+		&claims, 
+		func(t *jwt.Token) (any, error) {return []byte(tokenSecret), nil},
+	) 
 	if err != nil {
 		return uuid.UUID{},  err
 	}
+
 	if !token.Valid{
 		return uuid.UUID{}, fmt.Errorf("token not valid")
 	}
+
 	userIDString, err := token.Claims.GetSubject()
 	if err != nil {
 		return uuid.UUID{}, err
 	}
-	
+
 	issuer, err := token.Claims.GetIssuer()
 	if err != nil {
 		return uuid.UUID{}, err
 	}
-	if issuer != "chirpy" {
+
+	if issuer != tokenIssuer {
 		return uuid.UUID{}, errors.New("invalid issuer")
 	}
 
@@ -71,9 +89,11 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error){
 	if err != nil {
 		return uuid.UUID{}, fmt.Errorf("invalid userID: %w", err)
 	}
+
 	return userID, nil
 }
 
+// getting the token out of the auth header field and stripping it
 func GetBearerToken(headers http.Header) (string, error) {
 	tokenString := headers.Get("Authorization")
 	if tokenString == "" {
@@ -82,4 +102,18 @@ func GetBearerToken(headers http.Header) (string, error) {
 	rawTokenString := strings.TrimPrefix(strings.TrimSpace(tokenString), "Bearer ")
 	
 	return rawTokenString, nil
+}
+
+// make a refresh token which is used to make a new access token
+func MakeRefreshToken() (string, error) {
+	key := make([]byte, refreshTokenLength)
+
+	_, err := rand.Read(key)
+	if err != nil {
+		return "", err
+	} 
+
+	hexString := hex.EncodeToString(key)
+
+	return hexString, nil
 }

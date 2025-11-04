@@ -102,10 +102,9 @@ func (cfg *apiConfig) handlerChirps(w http.ResponseWriter, r *http.Request) {
 	}
 	validatedID, err := internal.ValidateJWT(bearerToken, cfg.jwtsecret)
 	if err != nil {
-		responseWithError(w, http.StatusInternalServerError, fmt.Sprintf("error in the method %w", err), err)
+		responseWithError(w, http.StatusUnauthorized, fmt.Sprintf("only validating access tokens %v", err), err)
 		return
 	}
-
 	params.Body = replaceBadWords(params.Body, badWords)
 	chirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
 		Body: params.Body,

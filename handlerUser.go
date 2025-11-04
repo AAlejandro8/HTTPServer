@@ -61,36 +61,21 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Password string `json:"password"`
 		Email string `json:"email"`
-		Expires *int `json:"expires_in_seconds"`
 	}
 	// response
 	type response struct {
 		User
 		Token string `json:"token"`
+		RefreshToken string `json:"refresh_token"`
 	}
+
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
 	if err := decoder.Decode(&params); err != nil {
 		responseWithError(w, http.StatusInternalServerError, "error decoding", err)
 		return
 	}
-	// handle expire time
-	maxSeconds := 3600
-	var expiresSeconds int
-	if params.Expires == nil {
-		expiresSeconds = maxSeconds
-	} else {
-		v := *params.Expires
-		switch {
-		case v <= 0:
-			expiresSeconds = maxSeconds
-		case v > maxSeconds:
-			expiresSeconds = maxSeconds
-		default:
-			expiresSeconds = v
-		}
-	}
-	exp := time.Duration(expiresSeconds) * time.Second
+
 	// get user
 	user, err := cfg.db.GetUserByEmail(r.Context(), params.Email)
 	if err != nil {
@@ -108,10 +93,27 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		responseWithError(w, http.StatusUnauthorized, "password doesnt match", err)
 		return
 	}
+
+	// time the token lasts 
+	expirationTime := time.Hour
 	// make the token 
-	token, err := internal.MakeJWT(user.ID, cfg.jwtsecret, exp)
+	accessToken, err := internal.MakeJWT(user.ID, cfg.jwtsecret, expirationTime)
 	if err != nil {
 		responseWithError(w, http.StatusInternalServerError, "error making JWT token", err)
+		return
+	}
+	// make refresh token
+	refreshString, err := internal.MakeRefreshToken() 
+	if err != nil {
+		responseWithError(w, http.StatusInternalServerError, "error making refresh token", err)
+		return
+	}
+	_, err = cfg.db.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
+		Token: refreshString,
+		UserID: user.ID,
+	})
+	if err != nil {
+		responseWithError(w, http.StatusInternalServerError, "error storing the refresh token", err)
 		return
 	}
 	respondWithJSON(w, http.StatusOK, response{
@@ -121,6 +123,7 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt: user.UpdatedAt,
 		Email: user.Email,
 		},
-		Token: token,
+		Token: accessToken,
+		RefreshToken: refreshString,
 	})
 }
