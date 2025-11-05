@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"sort"
 
 	"github.com/AAelajndro8/HTTPServer/internal"
 	"github.com/AAelajndro8/HTTPServer/internal/database"
@@ -89,10 +90,23 @@ func (cfg *apiConfig) handlerDeleteChirp(w http.ResponseWriter, r *http.Request)
 func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
 	dbChirps, err := cfg.db.GetChirps(r.Context())
 	if err != nil {
-		responseWithError(w, http.StatusInternalServerError, "unable to get chirps", err)
+		responseWithError(w, http.StatusInternalServerError, "Couldn't retrieve chirps", err)
+		return
 	}
+	authorID := uuid.Nil
+	authorIdString := r.URL.Query().Get("author_id")
+	if authorIdString != "" {
+		authorID, err = uuid.Parse(authorIdString)
+		if err != nil {
+			responseWithError(w, http.StatusBadRequest, "Couldn't retrieve chirps", err)
+			return
+		}
+	}	
 	chrips := []Chirp{}
 	for _, chirp := range dbChirps {
+		if authorID != uuid.Nil && authorID != chirp.UserID {
+			continue
+		}
 		chrips = append(chrips, Chirp{
 				Id: chirp.ID,
 				CreatedAt: chirp.CreatedAt,
@@ -101,6 +115,12 @@ func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
 				UserId: chirp.UserID,
 			}) 
 	}
+	sortQuery := r.URL.Query().Get("sort")
+	if sortQuery == "desc"{
+		sort.Slice(chrips, func(i, j int) bool {
+			return chrips[i].CreatedAt.After(chrips[j].CreatedAt)
+		})
+	}	
 	respondWithJSON(w, http.StatusOK, chrips)
 }
 
