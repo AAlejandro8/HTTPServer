@@ -13,6 +13,7 @@ WHERE token = $1 AND expires_at > NOW() AND revoked_at IS NULL;
 
 -- name: RevokeToken :exec
 UPDATE refresh_tokens
-SET revoked_at = NOW(), updated_at = NOW()
+SET revoked_at = NOW(), 
+updated_at = NOW()
 WHERE token = $1;
 --

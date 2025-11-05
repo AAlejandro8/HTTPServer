@@ -21,8 +21,8 @@ type Chirp struct {
 }
 
 func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, r *http.Request) {
-	param1 := r.PathValue("chirpID")
-	chirpID, err := uuid.Parse(param1)
+	param := r.PathValue("chirpID")
+	chirpID, err := uuid.Parse(param)
 	if err != nil {
 		responseWithError(w, http.StatusBadRequest, "Invalid chirp ID", err)
 		return
@@ -47,6 +47,44 @@ func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (cfg *apiConfig) handlerDeleteChirp(w http.ResponseWriter, r *http.Request) {
+	chirpIDString := r.PathValue("chirpID")
+	chirpID, err := uuid.Parse(chirpIDString)
+	if err != nil {
+		responseWithError(w, http.StatusBadRequest, "error parsing param id", err)
+		return
+	}
+	// check the auth
+	token, err := internal.GetBearerToken(r.Header)
+	if err != nil {
+		responseWithError(w, http.StatusUnauthorized, "error getting token in header", err)
+		return 
+	}
+	// validate it
+	userID, err := internal.ValidateJWT(token, cfg.jwtsecret)
+	if err != nil {
+		responseWithError(w, http.StatusUnauthorized, "unable to validate token", err)
+		return
+	}
+	// check if the chirp exists
+	dbChirp, err := cfg.db.GetChirpByID(r.Context(), chirpID)
+	if err != nil {
+		responseWithError(w, http.StatusNotFound, "unable to find chirp", err)
+		return 
+	}
+	if userID != dbChirp.UserID {
+		responseWithError(w, http.StatusForbidden, "not your post", err)
+		return 
+	}
+	// delete the chirp
+	err = cfg.db.DeleteChirp(r.Context(), chirpID)
+	if err != nil {
+		responseWithError(w, http.StatusUnauthorized, "invalid user id or chirp id ", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
 
 func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
 	dbChirps, err := cfg.db.GetChirps(r.Context())
@@ -64,7 +102,8 @@ func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
 			}) 
 	}
 	respondWithJSON(w, http.StatusOK, chrips)
-	}
+}
+
 
 
 

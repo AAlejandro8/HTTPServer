@@ -72,7 +72,7 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
 	if err := decoder.Decode(&params); err != nil {
-		responseWithError(w, http.StatusInternalServerError, "error decoding", err)
+		responseWithError(w, http.StatusInternalServerError, "error decoding request params", err)
 		return
 	}
 
@@ -125,5 +125,63 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		},
 		Token: accessToken,
 		RefreshToken: refreshString,
+	})
+}
+
+func (cfg *apiConfig) handlerUpdateInfo (w http.ResponseWriter, r *http.Request) {
+	// incoming 
+	type parameters struct {
+		Email string `json:"email"`
+		Password string `json:"password"`
+	}
+	// response 
+	type response struct {
+		User
+	}
+	// check access token in header
+	accessToken, err := internal.GetBearerToken(r.Header)
+	if err != nil {
+		responseWithError(w, http.StatusUnauthorized, "no access token in request header", err)
+		return
+	}
+	// validate the token 
+	userID, err := internal.ValidateJWT(accessToken, cfg.jwtsecret)
+	if err != nil {
+		responseWithError(w, http.StatusUnauthorized, "token isnt valid", err)
+		return
+	}
+
+	// get the request params
+	decoder := json.NewDecoder(r.Body)
+	params := parameters{}
+	if err := decoder.Decode(&params); err != nil {
+		responseWithError(w, http.StatusInternalServerError, "error decoing request params", err)
+		return 
+	}
+
+	// hash new password
+	hashedPassword, err := internal.HashPassword(params.Password)
+	if err != nil {
+		responseWithError(w, http.StatusInternalServerError, "error hashing the password", err)
+		return
+	}
+
+	// update the email and password 
+	updatedUser, err := cfg.db.UpdateUserEmailAndPassword(r.Context(), database.UpdateUserEmailAndPasswordParams{
+		ID: userID,
+		Email: params.Email,
+		HashedPassword: hashedPassword,
+	})
+	if err != nil {
+		responseWithError(w, http.StatusInternalServerError, "error updating user info", err)
+		return 
+	}
+	respondWithJSON(w, http.StatusOK, response{
+		User: User{
+			Id: updatedUser.ID,
+			CreatedAt: updatedUser.CreatedAt,
+			UpdatedAt: updatedUser.UpdatedAt,
+			Email: updatedUser.Email,
+		},
 	})
 }
