@@ -117,3 +117,12 @@ func MakeRefreshToken() (string, error) {
 
 	return hexString, nil
 }
+
+func GetAPIKey (headers http.Header) (string, error) {
+	apiHeader := headers.Get("Authorization")
+	if apiHeader == "" {
+		return "", errors.New("authorization empty in headers")
+	}
+	apiKey := strings.TrimPrefix(strings.TrimSpace(apiHeader), "ApiKey ")
+	return apiKey, nil
+}
